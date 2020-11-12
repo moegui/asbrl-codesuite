@@ -131,35 +131,37 @@ Example Playbook
             ROLE: CodePipelineES
             STAGES: 
             - NAME: Source
-            ACTIONS:
-            - NAME: SourceAction
-              RUN_ORDER: 1
-              ACTION_TYPE_ID:
-              CATEGORY: Source
-              OWNER: AWS
-              VERSION: 1
-              PROVIDER: S3
-              CONFIGURATION:
-              - KEY: S3_BUCKET
-                VALUE: '!Ref CodePipeline'
-              - KEY: S3_KEY
-                VALUE: '!Ref CodePipelineKey'
-              - KEY: POLL_SOURCE_CHANGES
-                VALUE: 'true'
-              OUTPUT_ARTIFACTS:
-                - NAME: SourceOutput 
+              ACTIONS:
+              - NAME: SourceAction
+                RUN_ORDER: 1
+                ACTION_TYPE_ID:
+                CATEGORY: Source
+                OWNER: AWS
+                VERSION: 1
+                PROVIDER: S3
+                CONFIGURATION:
+                - KEY: S3_BUCKET
+                  VALUE: '!Ref CodePipeline'
+                - KEY: S3_KEY
+                  VALUE: '!Ref CodePipelineKey'
+                - KEY: POLL_SOURCE_CHANGES
+                  VALUE: 'true'
+                OUTPUT_ARTIFACTS:
+                  - NAME: SourceOutput 
             - NAME: Build
-              RUN_ORDER: 1
-              ACTION_TYPE_ID:
-              CATEGORY: Build
-              OWNER: AWS
-              VERSION: 1
-              PROVIDER: CodeBuild
-              CONFIGURATION:
-              - KEY: ProjectName
-                VALUE: '!Ref CodeBuildESImage{{ReleaseName}}'
-              INPUT_ARTIFACTS:
-              - NAME: SourceOutput
+              ACTIONS:
+              - NAME: BuildAction
+                RUN_ORDER: 1
+                ACTION_TYPE_ID:
+                CATEGORY: Build
+                OWNER: AWS
+                VERSION: 1
+                PROVIDER: CodeBuild
+                CONFIGURATION:
+                - KEY: ProjectName
+                  VALUE: '!Ref CodeBuildESImage{{ReleaseName}}'
+                INPUT_ARTIFACTS:
+                - NAME: SourceOutput
           WAIT_CONDITION:
           - NAME: CodeBuildIsReady
             DEPENDS_ON: CodePipelineESImage
