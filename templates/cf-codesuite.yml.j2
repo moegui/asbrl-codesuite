@@ -41,10 +41,12 @@ Resources:
 {% for z in range(0,CODEBUILD|length) %}
   CodeBuild{{CODEBUILD[z].NAME}}:
     Type: AWS::CodeBuild::Project
+{% if CODEBUILD[z].DEPENDS_ON is defined %}
 {% for y in range(0,CODEBUILD[z].DEPENDS_ON|length) %}
     DependsOn:
       - {{CODEBUILD[z].DEPENDS_ON[y]}}
 {% endfor %}
+{% endif %}
     Properties:
       Name: !Sub "${Prefix}-${ClusterName}-codebuild-{{CODEBUILD[z].NAME|lower}}"
       Description: {{CODEBUILD[z].DESCRIPTION}}
@@ -84,9 +86,11 @@ Resources:
     Type: AWS::CodePipeline::Pipeline 
     DependsOn:
       - ArtifactsBucket
+{% if CODEPIPELINE[z].DEPENDS_ON is defined %}
 {% for y in range(0,CODEPIPELINE[z].DEPENDS_ON|length) %}
       - {{CODEPIPELINE[z].DEPENDS_ON[y]}}
 {% endfor %}
+{% endif %}
     Properties:
       RestartExecutionOnUpdate: {{CODEPIPELINE[z].RESTART_EXECUTION_ON_UPDATE}}
       RoleArn: 
