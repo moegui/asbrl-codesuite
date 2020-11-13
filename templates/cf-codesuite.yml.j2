@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+
+  Prefix:
+    Type: String
+  ClusterName:
+    Type: String
+{% for z in range(0,PARAMETERS|length) %}
+  {{PARAMETERS[z].NAME}}:
+    Type: {{PARAMETERS[z].TYPE}}
+{% endfor %}
+
+Resources:
+
+{% for z in range(0,ECR_REPOSITORY|length) %}
+  ECR{{ECR_REPOSITORY[z].NAME}}:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${Prefix}-${ClusterName}-{{ECR_REPOSITORY[z].NAME|lower}}
+      Tags: 
+        - Key: ClusterName  
+          Value: !Ref ClusterName
+        - Key: Release
+          Value: {{TAGS.RELEASE}}
+        - Key: Environment
+          Value: {{TAGS.ENVIRONMENT_TYPE}} 
+{% endfor %}
+
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties: 
+      Tags: 
+        - Key: ClusterName  
+          Value: !Ref ClusterName
+        - Key: Release
+          Value: {{TAGS.RELEASE}}
+        - Key: Environment
+          Value: {{TAGS.ENVIRONMENT_TYPE}} 
+
+{% for z in range(0,CODEBUILD|length) %}
+  CodeBuild{{CODEBUILD[z].NAME}}:
+    Type: AWS::CodeBuild::Project
+{% if CODEBUILD[z].DEPENDS_ON is defined %}
+{% for y in range(0,CODEBUILD[z].DEPENDS_ON|length) %}
+    DependsOn:
+      - {{CODEBUILD[z].DEPENDS_ON[y]}}
+{% endfor %}
+{% endif %}
+    Properties:
+      Name: !Sub "${Prefix}-${ClusterName}-codebuild-{{CODEBUILD[z].NAME|lower}}"
+      Description: {{CODEBUILD[z].DESCRIPTION}}
+      ServiceRole:
+        Fn::ImportValue: !Sub "${ClusterName}-Role{{CODEBUILD[z].SERVICE_ROLE}}-Arn"
+      Artifacts:
+        Type: {{CODEBUILD[z].ARTIFACTS.TYPE}}
+      Environment:
+        Type: {{CODEBUILD[z].ENVIRONMENT.TYPE}}
+        ComputeType: {{CODEBUILD[z].ENVIRONMENT.COMPUTE_TYPE}}
+        Image: {{CODEBUILD[z].ENVIRONMENT.IMAGE}}
+        PrivilegedMode: {{CODEBUILD[z].ENVIRONMENT.PRIVILEGED_MODE}}
+        EnvironmentVariables:
+{% for y in range(0,CODEBUILD[z].ENVIRONMENT.VARIABLES|length) %}
+          - Name: {{CODEBUILD[z].ENVIRONMENT.VARIABLES[y].NAME}}
+            Value: {{CODEBUILD[z].ENVIRONMENT.VARIABLES[y].VALUE}}
+{% endfor %}
+      Source: 
+        Type: {{CODEBUILD[z].SOURCE.TYPE}}
+      TimeoutInMinutes: {{CODEBUILD[z].TIMEOUT_MINUTES}}
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Sub "${Prefix}-${ClusterName}"
+          Status: ENABLED
+          StreamName: !Sub "CodeBuild-{{CODEBUILD[z].NAME}}"
+      Tags: 
+        - Key: ClusterName  
+          Value: !Ref ClusterName
+        - Key: Release
+          Value: {{TAGS.RELEASE}}
+        - Key: Environment
+          Value: {{TAGS.ENVIRONMENT_TYPE}} 
+
+{% endfor %}
+{% for z in range(0,CODEPIPELINE|length) %}
+  CodePipeline{{CODEPIPELINE[z].NAME}}: 
+    Type: AWS::CodePipeline::Pipeline 
+    DependsOn:
+      - ArtifactsBucket
+{% if CODEPIPELINE[z].DEPENDS_ON is defined %}
+{% for y in range(0,CODEPIPELINE[z].DEPENDS_ON|length) %}
+      - {{CODEPIPELINE[z].DEPENDS_ON[y]}}
+{% endfor %}
+{% endif %}
+    Properties:
+      RestartExecutionOnUpdate: {{CODEPIPELINE[z].RESTART_EXECUTION_ON_UPDATE}}
+      RoleArn: 
+        Fn::ImportValue: !Sub "${ClusterName}-Role{{CODEPIPELINE[z].ROLE}}-Arn"
+      Stages: 
+{% for y in range(0,CODEPIPELINE[z].STAGES|length) %}
+        - Name: {{CODEPIPELINE[z].STAGES[y].NAME}} 
+          Actions: 
+{% for w in range(0,CODEPIPELINE[z].STAGES[y].ACTIONS|length) %}
+            - Name: {{CODEPIPELINE[z].STAGES[y].ACTIONS[w].NAME}} 
+              RunOrder: {{CODEPIPELINE[z].STAGES[y].ACTIONS[w].RUN_ORDER}}
+              ActionTypeId: 
+                Category: {{CODEPIPELINE[z].STAGES[y].ACTIONS[w].ACTION_TYPE_ID.CATEGORY}} 
+                Owner: {{CODEPIPELINE[z].STAGES[y].ACTIONS[w].ACTION_TYPE_ID.OWNER}}  
+                Version: {{CODEPIPELINE[z].STAGES[y].ACTIONS[w].ACTION_TYPE_ID.VERSION}}  
+                Provider: {{CODEPIPELINE[z].STAGES[y].ACTIONS[w].ACTION_TYPE_ID.PROVIDER}}  
+              Configuration: 
+{% for x in range(0,CODEPIPELINE[z].STAGES[y].ACTIONS[w].CONFIGURATION|length) %}
+                {{CODEPIPELINE[z].STAGES[y].ACTIONS[w].CONFIGURATION[x].KEY}}: {{CODEPIPELINE[z].STAGES[y].ACTIONS[w].CONFIGURATION[x].VALUE}}
+{% endfor %}
+{% if CODEPIPELINE[z].STAGES[y].ACTIONS[w].INPUT_ARTIFACTS is defined %}
+              InputArtifacts: 
+{% for x in range(0,CODEPIPELINE[z].STAGES[y].ACTIONS[w].INPUT_ARTIFACTS|length) %}
+                - Name: {{CODEPIPELINE[z].STAGES[y].ACTIONS[w].INPUT_ARTIFACTS[x].NAME}}
+{% endfor %}
+{% endif %}
+{% if CODEPIPELINE[z].STAGES[y].ACTIONS[w].OUTPUT_ARTIFACTS is defined %}
+              OutputArtifacts: 
+{% for x in range(0,CODEPIPELINE[z].STAGES[y].ACTIONS[w].OUTPUT_ARTIFACTS|length) %}
+                - Name: {{CODEPIPELINE[z].STAGES[y].ACTIONS[w].OUTPUT_ARTIFACTS[x].NAME}}
+{% endfor %}{% endif %}{% endfor %}{% endfor %}
+      ArtifactStore: 
+        Type: S3 
+        Location: !Ref "ArtifactsBucket"
+      Tags: 
+        - Key: ClusterName  
+          Value: !Ref ClusterName
+        - Key: Release
+          Value: {{TAGS.RELEASE}}
+        - Key: Environment
+          Value: {{TAGS.ENVIRONMENT_TYPE}}
+
+{% endfor %}
+{% for z in range(0,WAIT_CONDITION|length) %}
+  WaitHandleUntil{{WAIT_CONDITION[z].NAME}}:
+    Type: AWS::CloudFormation::WaitConditionHandle
+  
+  WaitUntil{{WAIT_CONDITION[z].NAME}}:
+    Type: AWS::CloudFormation::WaitCondition
+    DependsOn: 
+    - {{WAIT_CONDITION[z].DEPENDS_ON}}
+    Properties:
+      Handle: !Ref WaitHandleUntil{{WAIT_CONDITION[z].NAME}}
+      Timeout: {{WAIT_CONDITION[z].TIMEOUT}}
+
+{% endfor %}
+Outputs:
+  ArtifactsBucket:
+    Value: !Ref "ArtifactsBucket"
+    Export:
+      Name: !Sub "${ClusterName}-ArtifactsBucket"

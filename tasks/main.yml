@@ -1,0 +1,7 @@
+---
+  - name: Generate CF CodeSuite
+    template:
+      src: "cf-codesuite.yml.j2"
+      dest: "{{ TEMPLATE_DEST }}"
+      trim_blocks: true
+      mode: 0644
